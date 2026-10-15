@@ -12,6 +12,7 @@ CONFIG_FILE = CONFIG_DIR / "config.json"
 @dataclass
 class Config:
     db_path: Path = field(default_factory=lambda: DATA_DIR / "mledger.sqlite")
+    lang: str = field(default="es")
 
     def __post_init__(self) -> None:
         if not CONFIG_FILE.exists():
@@ -28,5 +29,5 @@ class Config:
     def save(self) -> None:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         with open(CONFIG_FILE, "w", encoding="utf-8") as f:
-            d: dict = {"db_path": str(self.db_path)}
+            d: dict = {"db_path": str(self.db_path), "lang": self.lang}
             json.dump(d, f, indent=4)

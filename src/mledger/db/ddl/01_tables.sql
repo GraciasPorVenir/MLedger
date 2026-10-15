@@ -15,7 +15,8 @@ CREATE TABLE IF NOT EXISTS transactions(
   metadata_id INTEGER NOT NULL REFERENCES metadata(id),
   cents INTEGER NOT NULL CHECK ( cents > 0 ),
   currency TEXT NOT NULL CHECK( length(currency) = 3 ),
-  type INTEGER DEFAULT 0 CHECK ( type IN (0, 1) ),
+  is_income INTEGER DEFAULT 0 CHECK ( is_income IN (0, 1) ),
+  installments INTEGER DEFAULT 1 CHECK ( installments > 0 ),
   created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 

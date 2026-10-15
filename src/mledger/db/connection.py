@@ -15,8 +15,13 @@ class Connection:
     def connect(self, db_path: Path) -> None:
         if db_path.suffix == ".sqlite":
             self.close()
-            self.conn: sqlite3.Connection = sqlite3.connect(db_path)
+            self.conn: sqlite3.Connection = sqlite3.connect(
+                db_path, check_same_thread=False
+            )
             self.conn.row_factory = sqlite3.Row
+            for ddl in (Path(__file__).resolve().parent / "ddl").iterdir():
+                if ddl.is_file() and ddl.suffix == ".sql":
+                    self.conn.executescript(ddl.read_text())
 
     @contextmanager
     def get_cursor(self) -> Generator[sqlite3.Cursor]:
