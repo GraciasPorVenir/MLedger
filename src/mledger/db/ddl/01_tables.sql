@@ -7,7 +7,8 @@ CREATE TABLE IF NOT EXISTS metadata(
   id INTEGER PRIMARY KEY,
   category_id INTEGER NOT NULL REFERENCES categories(id),
   frequency INTEGER DEFAULT 0 CHECK ( frequency BETWEEN 0 AND 5 ),
-  reason TEXT
+  reason TEXT,
+  UNIQUE(category_id, frequency, reason)
 );
 
 CREATE TABLE IF NOT EXISTS transactions(

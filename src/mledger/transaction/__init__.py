@@ -1,4 +1,4 @@
-from .view import table_view
+from .view import TransactionView
 
 
-__all__ = ["table_view"]
+__all__ = ["TransactionView"]

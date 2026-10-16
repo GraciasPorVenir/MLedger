@@ -1,3 +1,21 @@
 {
-
+  "transaction": {
+    "frequencies": ["Ninguna", "Diaria", "Mensual", "Semanal", "Anual"],
+    "records": "Registros",
+    "page": "Página",
+    "new": "Nueva transacción",
+    "back": "Volver",
+    "is_income": "Ingreso",
+    "currency": "Moneda",
+    "installments": "Cuotas",
+    "frequency": "Frequencia",
+    "reason": "Razón",
+    "category": "Categoría",
+    "created_at": "Fecha creación",
+    "amount": "Monto",
+    "send": "Enviar",
+    "paid_at": "Fecha pago",
+    "last_payment": "Último pago",
+    "partial_amount": "Primer pago"
+  }
 }

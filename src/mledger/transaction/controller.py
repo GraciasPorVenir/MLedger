@@ -1,11 +1,10 @@
-from decimal import Decimal
 from pathlib import Path
+from math import ceil
 
 import pandas as pd
 from sqlite3 import Row, Error
 from datetime import datetime
 
-from .model import ViewTransaction
 from ..db import Connection
 
 
@@ -13,25 +12,44 @@ class TransactionController:
     def __init__(self, conn: Connection) -> None:
         self.conn: Connection = conn
 
-    def select_df(self, limit: int = 1000, page: int = 1) -> pd.DataFrame:
-        page = max(1, page)
-        sql: str = (
-            "SELECT * FROM vw_transactions ORDER BY created_at DESC LIMIT ? OFFSET ?;"
-        )
-        params: tuple[int, ...] = (limit, limit * (page - 1))
+    def select_df(
+        self, limit: int = 15, page: int = 1, filters: list[str] | None = None
+    ) -> pd.DataFrame:
+        page = max(1, int(page))
+        if filters:
+            where = f"WHERE {' OR '.join(['category = ?'] * len(filters))}"
+            params = list(filters) + [limit, limit * (page - 1)]
+        else:
+            where = ""
+            params = [limit, limit * (page - 1)]
+        sql: str = f"SELECT id, is_income, cents, currency, frequency, installments, category, created_at, last_payment FROM vw_transactions {where} LIMIT ? OFFSET ?;"
         df: pd.DataFrame = pd.read_sql(
             sql, self.conn.conn, params=params, index_col="id"
         )
         if df.empty:
             return df
-        df["amount"] = (df["cents"] / 100).map("{:0.2f}".format)
+        df["amount"] = df["cents"] / 100.0
         df["is_income"] = df["is_income"].astype(bool)
         df["created_at"] = pd.to_datetime(df["created_at"])
+        df["last_payment"] = pd.to_datetime(df["last_payment"])
         return df
 
     def get_currencies(self) -> list[str]:
         with open(Path(__file__).resolve().parent / "currencies.txt") as f:
-            return f.readlines()
+            return [line.strip() for line in f if line.strip()]
+
+    def get_categories(self) -> list[str]:
+        with self.conn.get_cursor() as cur:
+            cat = cur.execute("SELECT name FROM categories;").fetchall()
+            return [c[0] for c in cat]
+
+    def get_pagination(self, limit: int = 15) -> int:
+        with self.conn.get_cursor() as cur:
+            count = cur.execute("SELECT COUNT(id) FROM transactions;").fetchone()
+            total_items = count[0] if count else 0
+            if total_items == 0:
+                return 1
+            return ceil(total_items / limit)
 
     def insert(
         self,
@@ -42,8 +60,9 @@ class TransactionController:
         currency: str = "USD",
         is_income: int = 1,
         installments: int = 1,
-        created_at: str = datetime.now().isoformat(sep=" ", timespec="seconds"),
-    ) -> ViewTransaction:
+        partial_cents: int | None = None,
+        paid_at: datetime | None = None,
+    ) -> None:
         with self.conn.get_cursor() as cur:
             if currency not in self.get_currencies():
                 raise Error("CUR_409")
@@ -51,21 +70,11 @@ class TransactionController:
             c: Row = cur.execute(sql, (category,)).fetchone()
             if c == None:
                 raise Error("CAT_404")
-            sql = "INSERT INTO metadata(category_id, frequency, reason) VALUES (?, ?, ?) RETURNING id;"
+            sql = "INSERT INTO metadata(category_id, frequency, reason) VALUES (?, ?, ?) ON CONFLICT(category_id, frequency, reason) DO NOTHING RETURNING id;"
             m: Row = cur.execute(sql, (c["id"], frequency, reason)).fetchone()
-            params = (m["id"], cents, currency, is_income, installments, created_at)
-            sql = "INSERT INTO transactions(metadata_id, cents, currency, is_income, installments, created_at) VALUES (?, ?, ?, ?, ?, ?) RETURNING *"
+            params = (m["id"], cents, currency, is_income, installments)
+            sql = "INSERT INTO transactions(metadata_id, cents, currency, is_income, installments) VALUES (?, ?, ?, ?, ?) RETURNING *"
             t: Row = cur.execute(sql, params).fetchone()
-            return ViewTransaction(
-                id=t["id"],
-                metadata_id=t["metadata_id"],
-                category_id=m["category_id"],
-                cents=t["cents"],
-                currency=t["currency"],
-                is_income=t["is_income"],
-                installments=t["installments"],
-                created_at=t["created_at"],
-                category=c["name"],
-                frequency=m["frequency"],
-                reason=m["reason"],
-            )
+            if partial_cents != None:
+                sql: str = "INSERT INTO payments(cents, paid_at, transaction_id) VALUES (?, ?, ?);"
+                cur.execute(sql, (partial_cents, paid_at, t["id"]))
