@@ -20,21 +20,40 @@ class TransactionView:
 
     @st.cache_data
     def get_df(
-        _self, filters: list[str], limit: int = 20, page: int = 1
+        _self,
+        filters: dict[str, list[int | str]],
+        limit: int = 20,
+        page: int = 1,
     ) -> pd.DataFrame:
         return _self.controller.select_df(limit=limit, page=page, filters=filters)
 
     def select(self) -> None:
-        col1, col2 = st.columns([2, 1])
-        with col2:
+        filters: dict[str, list[str | int]] = {}
+
+        cA1, cA2, cA3 = st.columns([2, 1, 1])
+        with cA1:
+            filters["category"] = st.multiselect(
+                self.lang["category"], self.controller.get_categories()
+            )
+        with cA2:
+            filters["currency"] = st.multiselect(
+                self.lang["currency"], self.controller.get_currencies()
+            )
+        with cA3:
+            filters["frequency"] = st.multiselect(
+                self.lang["frequency"], self.lang["frequencies"]
+            )
+
+        cB1, cB2 = st.columns([2, 1])
+        with cB2:
             if self.insert_page and st.button(self.lang["new"]):
                 st.switch_page(self.insert_page)
-        with col1:
+        with cB1:
             LIMIT: int = 20
-            page: int = st.pagination(self.controller.get_pagination(LIMIT))
-        filters: list[str] = st.multiselect(
-            self.lang["category"], self.controller.get_categories()
-        )
+            page: int = st.pagination(
+                self.controller.get_pagination(filters=filters, limit=LIMIT)
+            )
+
         df: pd.DataFrame = self.get_df(limit=LIMIT, page=page, filters=filters)
         column_order: list[str] = [
             "is_income",

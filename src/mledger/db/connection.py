@@ -19,7 +19,7 @@ class Connection:
                 db_path, check_same_thread=False
             )
             self.conn.row_factory = sqlite3.Row
-            for ddl in (Path(__file__).resolve().parent / "ddl").iterdir():
+            for ddl in sorted((Path(__file__).resolve().parent / "ddl").iterdir()):
                 if ddl.is_file() and ddl.suffix == ".sql":
                     self.conn.executescript(ddl.read_text())
 

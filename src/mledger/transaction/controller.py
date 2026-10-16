@@ -12,16 +12,24 @@ class TransactionController:
     def __init__(self, conn: Connection) -> None:
         self.conn: Connection = conn
 
+    def check_filters(self, filters: dict[str, list[str | int]]) -> tuple[str, list]:
+        where: list = []
+        params: list = []
+        for key, value in filters.items():
+            if value:
+                where.append(" OR ".join([f"{key} = ?"]))
+                params.extend(value)
+        return (f" WHERE {' AND '.join(where)}", params) if where else ("", [])
+
     def select_df(
-        self, limit: int = 15, page: int = 1, filters: list[str] | None = None
+        self,
+        filters: dict[str, list[str | int]],
+        limit: int = 15,
+        page: int = 1,
     ) -> pd.DataFrame:
         page = max(1, int(page))
-        if filters:
-            where = f"WHERE {' OR '.join(['category = ?'] * len(filters))}"
-            params = list(filters) + [limit, limit * (page - 1)]
-        else:
-            where = ""
-            params = [limit, limit * (page - 1)]
+        where, params = self.check_filters(filters)
+        params.extend([limit, limit * (page - 1)])
         sql: str = f"SELECT id, is_income, cents, currency, frequency, installments, category, created_at, last_payment FROM vw_transactions {where} LIMIT ? OFFSET ?;"
         df: pd.DataFrame = pd.read_sql(
             sql, self.conn.conn, params=params, index_col="id"
@@ -43,9 +51,14 @@ class TransactionController:
             cat = cur.execute("SELECT name FROM categories;").fetchall()
             return [c[0] for c in cat]
 
-    def get_pagination(self, limit: int = 15) -> int:
+    def get_pagination(
+        self, filters: dict[str, list[str | int]], limit: int = 15
+    ) -> int:
         with self.conn.get_cursor() as cur:
-            count = cur.execute("SELECT COUNT(id) FROM transactions;").fetchone()
+            where, params = self.check_filters(filters)
+            count = cur.execute(
+                f"SELECT COUNT(id) FROM transactions {where};", params
+            ).fetchone()
             total_items = count[0] if count else 0
             if total_items == 0:
                 return 1
@@ -70,7 +83,7 @@ class TransactionController:
             c: Row = cur.execute(sql, (category,)).fetchone()
             if c == None:
                 raise Error("CAT_404")
-            sql = "INSERT INTO metadata(category_id, frequency, reason) VALUES (?, ?, ?) ON CONFLICT(category_id, frequency, reason) DO NOTHING RETURNING id;"
+            sql = "INSERT INTO metadata(category_id, frequency, reason) VALUES (?, ?, ?) ON CONFLICT(category_id, frequency, reason) DO UPDATE SET category_id = excluded.category_id RETURNING id;"
             m: Row = cur.execute(sql, (c["id"], frequency, reason)).fetchone()
             params = (m["id"], cents, currency, is_income, installments)
             sql = "INSERT INTO transactions(metadata_id, cents, currency, is_income, installments) VALUES (?, ?, ?, ?, ?) RETURNING *"
